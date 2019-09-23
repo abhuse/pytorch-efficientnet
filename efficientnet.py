@@ -13,7 +13,7 @@ def _pair(x):
     return (x, x)
 
 
-class SamePaddingConv2d(nn.Conv2d):
+class SamePaddingConv2d(nn.Module):
     def __init__(self,
                  input_spatial_shape,
                  in_channels,
@@ -22,12 +22,7 @@ class SamePaddingConv2d(nn.Conv2d):
                  stride,
                  dilation=1,
                  **kwargs):
-        super(SamePaddingConv2d, self).__init__(in_channels=in_channels,
-                                                out_channels=out_channels,
-                                                kernel_size=kernel_size,
-                                                stride=stride,
-                                                dilation=dilation,
-                                                **kwargs)
+        super(SamePaddingConv2d, self).__init__()
 
         self.input_spatial_shape = _pair(input_spatial_shape)
         kernel_size = _pair(kernel_size)
@@ -57,7 +52,12 @@ class SamePaddingConv2d(nn.Conv2d):
             self.zero_pad = nn.ZeroPad2d(paddings)
         else:
             self.zero_pad = None
-
+        self.conv = nn.Conv2d(in_channels=in_channels,
+                              out_channels=out_channels,
+                              kernel_size=kernel_size,
+                              stride=stride,
+                              dilation=dilation,
+                              **kwargs)
         self.out_spatial_shape = (out_height, out_width)
 
     def check_input(self, x):
@@ -67,11 +67,47 @@ class SamePaddingConv2d(nn.Conv2d):
 
     def forward(self, x):
         self.check_input(x)
-
         if self.zero_pad is not None:
             x = self.zero_pad(x)
+        x = self.conv(x)
+        return x
 
-        x = super(SamePaddingConv2d, self).forward(x)
+
+class ConvBNAct(nn.Module):
+    def __init__(self,
+                 out_channels,
+                 activation=None,
+                 bn_epsilon=None,
+                 bn_momentum=None,
+                 same_padding=False,
+                 **kwargs):
+        super(ConvBNAct, self).__init__()
+
+        _conv_cls = SamePaddingConv2d if same_padding else nn.Conv2d
+        self.conv = _conv_cls(out_channels=out_channels, **kwargs)
+
+        bn_kwargs = {}
+        if bn_epsilon is not None:
+            bn_kwargs["eps"] = bn_epsilon
+        if bn_momentum is not None:
+            bn_kwargs["momentum"] = bn_momentum
+
+        self.bn = nn.BatchNorm2d(out_channels, **bn_kwargs)
+        self.activation = activation
+        self.out_channels = out_channels
+
+    @property
+    def out_spatial_shape(self):
+        if isinstance(self.conv, SamePaddingConv2d):
+            return self.conv.out_spatial_shape
+        else:
+            return None
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.bn(x)
+        if self.activation is not None:
+            x = self.activation(x)
         return x
 
 
@@ -152,10 +188,10 @@ class MBConvBlock(nn.Module):
                  kernel_size,
                  stride,
                  expansion_factor,
+                 activation,
                  bn_epsilon=None,
                  bn_momentum=None,
                  se_size=None,
-                 activation=None,
                  drop_connect_rate=None,
                  bias=False):
         """
@@ -185,50 +221,49 @@ class MBConvBlock(nn.Module):
             raise ValueError("expansion factor must be int and >=1, got {} instead".format(expansion_factor))
 
         exp_channels = in_channels * expansion_factor
-        kernel_size = [kernel_size] * 2 if isinstance(kernel_size, int) else kernel_size
-        stride = [stride] * 2 if isinstance(stride, int) else stride
+        kernel_size = _pair(kernel_size)
+        stride = _pair(stride)
 
-        bn_kwargs = {}
-        if bn_epsilon is not None:
-            bn_kwargs["eps"] = bn_epsilon
-        if bn_momentum is not None:
-            bn_kwargs["momentum"] = bn_momentum
+        self.activation = activation
 
         # expansion convolution
         if expansion_factor != 1:
-            self.expansion_conv_enabled = True
-            self.expand_conv = nn.Conv2d(in_channels=in_channels,
+            self.expand_conv = ConvBNAct(in_channels=in_channels,
                                          out_channels=exp_channels,
                                          kernel_size=(1, 1),
-                                         bias=bias)
-            self.expand_bn = nn.BatchNorm2d(exp_channels, **bn_kwargs)
+                                         bias=bias,
+                                         activation=self.activation,
+                                         bn_epsilon=bn_epsilon,
+                                         bn_momentum=bn_momentum)
         else:
-            self.expansion_conv_enabled = False
+            self.expand_conv = None
 
         # depth-wise convolution
-        self.dp_conv = SamePaddingConv2d(
+        self.dp_conv = ConvBNAct(
             input_spatial_shape=input_spatial_shape,
             in_channels=exp_channels,
             out_channels=exp_channels,
             kernel_size=kernel_size,
             stride=stride,
             groups=exp_channels,
-            bias=bias)
-        self.dp_bn = nn.BatchNorm2d(exp_channels, **bn_kwargs)
-
+            bias=bias,
+            activation=self.activation,
+            same_padding=True,
+            bn_epsilon=bn_epsilon,
+            bn_momentum=bn_momentum)
         self.out_spatial_shape = self.dp_conv.out_spatial_shape
 
         if se_size is not None:
-            self.se_enabled = True
-            self.se = SqueezeExcitate(exp_channels, se_size, activation=activation)
+            self.se = SqueezeExcitate(exp_channels,
+                                      se_size,
+                                      activation=self.activation)
         else:
-            self.se_enabled = False
+            self.se = None
 
         if drop_connect_rate is not None:
-            self.drop_connect_enabled = True
             self.drop_connect = DropConnect(drop_connect_rate)
         else:
-            self.drop_connect_enabled = False
+            self.drop_connect = None
 
         if in_channels == out_channels and all(s == 1 for s in stride):
             self.skip_enabled = True
@@ -236,40 +271,72 @@ class MBConvBlock(nn.Module):
             self.skip_enabled = False
 
         # projection convolution
-        self.project_conv = nn.Conv2d(in_channels=exp_channels,
+        self.project_conv = ConvBNAct(in_channels=exp_channels,
                                       out_channels=out_channels,
                                       kernel_size=(1, 1),
-                                      bias=bias)
-        self.project_bn = nn.BatchNorm2d(out_channels, **bn_kwargs)
-        self.activation = F.relu if activation is None else activation
+                                      bias=bias,
+                                      activation=None,
+                                      bn_epsilon=bn_epsilon,
+                                      bn_momentum=bn_momentum)
 
     def forward(self, x):
         inp = x
 
-        if self.expansion_conv_enabled:
+        if self.expand_conv is not None:
             # expansion convolution applied only if expansion ratio > 1
             x = self.expand_conv(x)
-            x = self.expand_bn(x)
-            x = self.activation(x)
 
         # depth-wise convolution
         x = self.dp_conv(x)
-        x = self.dp_bn(x)
-        x = self.activation(x)
 
         # squeeze-and-excitate
-        if self.se_enabled:
+        if self.se is not None:
             x = self.se(x)
 
         # projection convolution
         x = self.project_conv(x)
-        x = self.project_bn(x)
 
         if self.skip_enabled:
             # drop-connect applied only if skip connection enabled
-            if self.drop_connect_enabled:
+            if self.drop_connect is not None:
                 x = self.drop_connect(x)
             x = x + inp
+        return x
+
+
+class EnetStage(nn.Module):
+    def __init__(self,
+                 num_layers,
+                 input_spatial_shape,
+                 in_channels,
+                 out_channels,
+                 stride,
+                 se_ratio,
+                 drop_connect_rates,
+                 **kwargs):
+        super(EnetStage, self).__init__()
+        self.num_layers = num_layers
+        self.layers = nn.ModuleList()
+        for i in range(self.num_layers):
+            se_size = max(1, in_channels // se_ratio)
+            layer = MBConvBlock(input_spatial_shape=input_spatial_shape,
+                                in_channels=in_channels,
+                                out_channels=out_channels,
+                                stride=stride,
+                                se_size=se_size,
+                                drop_connect_rate=drop_connect_rates[i],
+                                **kwargs)
+            self.layers.append(layer)
+            input_spatial_shape = layer.out_spatial_shape
+            # remaining MBConv blocks have stride 1 and in_channels=out_channels
+            stride = 1
+            in_channels = out_channels
+
+        self.out_spatial_shape = input_spatial_shape
+
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer(x)
         return x
 
 
@@ -304,7 +371,7 @@ class EfficientNet(nn.Module):
     ]
 
     # block_repeat, kernel_size, stride, expansion_factor, input_channels, output_channels, se_ratio
-    block_args = [
+    stage_args = [
         [1, 3, 1, 1, 32, 16, 4],
         [2, 3, 2, 6, 16, 24, 4],
         [2, 5, 2, 6, 24, 40, 4],
@@ -315,14 +382,14 @@ class EfficientNet(nn.Module):
     ]
 
     state_dict_urls = [
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b0-e6c39902.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b1-dd8fbb83.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b2-193ca240.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b3-f6776323.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b4-4facd840.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b5-f1219ce4.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b6-745f3bbc.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b7-460e9c0f.pth",
+        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b0-d86f8792.pth",
+        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b1-82896633.pth",
+        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b2-e4b93854.pth",
+        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b3-3b9ca610.pth",
+        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b4-24436ca5.pth",
+        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b5-d8e577e8.pth",
+        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b6-f20845c7.pth",
+        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b7-86e8e374.pth",
     ]
 
     def __init__(self,
@@ -333,7 +400,7 @@ class EfficientNet(nn.Module):
                  activation=Swish(),
                  bias=False,
                  drop_connect_rate=0.2,
-                 override_dropout_rate=None,
+                 dropout_rate=None,
                  bn_epsilon=1e-3,
                  bn_momentum=0.01,
                  pretrained=False,
@@ -347,7 +414,7 @@ class EfficientNet(nn.Module):
         :param activation: activation function
         :param bias: enable bias in convolution operations
         :param drop_connect_rate: DropConnect rate
-        :param override_dropout_rate: dropout rate, this will override default rate for each model
+        :param dropout_rate: dropout rate, this will override default rate for each model
         :param bn_epsilon: batch normalization epsilon
         :param bn_momentum: batch normalization momentum
         :param pretrained: initialize model with weights pre-trained on ImageNet
@@ -357,100 +424,91 @@ class EfficientNet(nn.Module):
         super(EfficientNet, self).__init__()
 
         # verify all parameters
-        EfficientNet._check_init_params(b,
-                                        in_channels,
-                                        n_classes,
-                                        input_spatial_shape,
-                                        activation,
-                                        bias,
-                                        drop_connect_rate,
-                                        override_dropout_rate,
-                                        bn_epsilon,
-                                        bn_momentum,
-                                        pretrained,
-                                        progress)
+        EfficientNet.check_init_params(b,
+                                       in_channels,
+                                       n_classes,
+                                       input_spatial_shape,
+                                       activation,
+                                       bias,
+                                       drop_connect_rate,
+                                       dropout_rate,
+                                       bn_epsilon,
+                                       bn_momentum,
+                                       pretrained,
+                                       progress)
 
         self.b = b
         self.in_channels = in_channels
-        self.activation = F.relu if activation is None else activation
+        self.activation = activation
+        self.drop_connect_rate = drop_connect_rate
+        self._override_dropout_rate = dropout_rate
 
-        width_coefficient, depth_coefficient, \
-        dropout_rate, spatial_shape = EfficientNet.coefficients[self.b]
+        width_coefficient, _, _, spatial_shape = EfficientNet.coefficients[self.b]
 
         if input_spatial_shape is not None:
             self.input_spatial_shape = _pair(input_spatial_shape)
         else:
             self.input_spatial_shape = _pair(spatial_shape)
 
-        if override_dropout_rate is not None:
-            dropout_rate = override_dropout_rate
-
         # initial convolution
         init_conv_out_channels = round_filters(32, width_coefficient)
-        self.init_conv = SamePaddingConv2d(input_spatial_shape=self.input_spatial_shape,
-                                           in_channels=self.in_channels,
-                                           out_channels=init_conv_out_channels,
-                                           kernel_size=(3, 3),
-                                           stride=(2, 2),
-                                           bias=bias)
-        self.init_bn = nn.BatchNorm2d(init_conv_out_channels,
-                                      eps=bn_epsilon, momentum=bn_momentum)
+        self.init_conv = ConvBNAct(input_spatial_shape=self.input_spatial_shape,
+                                   in_channels=self.in_channels,
+                                   out_channels=init_conv_out_channels,
+                                   kernel_size=(3, 3),
+                                   stride=(2, 2),
+                                   bias=bias,
+                                   activation=self.activation,
+                                   same_padding=True,
+                                   bn_epsilon=bn_epsilon,
+                                   bn_momentum=bn_momentum)
         spatial_shape = self.init_conv.out_spatial_shape
 
-        self.blocks = nn.ModuleList()
+        self.stages = nn.ModuleList()
+        mbconv_idx = 0
+        dc_rates = self.get_dc_rates()
+        for stage_id in range(self.num_stages):
+            kernel_size = self.get_stage_kernel_size(stage_id)
+            stride = self.get_stage_stride(stage_id)
+            expansion_factor = self.get_stage_expansion_factor(stage_id)
+            stage_in_channels = self.get_stage_in_channels(stage_id)
+            stage_out_channels = self.get_stage_out_channels(stage_id)
+            stage_num_layers = self.get_stage_num_layers(stage_id)
+            stage_dc_rates = dc_rates[mbconv_idx:mbconv_idx + stage_num_layers]
+            stage_se_ratio = self.get_stage_se_ratio(stage_id)
 
-        n_repeats = [round_repeats(arg[0], depth_coefficient) for arg in EfficientNet.block_args]
-        n_blocks = sum(n_repeats)
-
-        block_id = 0
-        for block_arg, n_repeat in zip(EfficientNet.block_args, n_repeats):
-            kernel_size = block_arg[1]
-            stride = block_arg[2]
-            expansion_factor = block_arg[3]
-            block_in_channels = round_filters(block_arg[4], width_coefficient)
-            block_out_channels = round_filters(block_arg[5], width_coefficient)
-
-            # repeat blocks
-            for k in range(n_repeat):
-                if drop_connect_rate is None:
-                    block_dc_rate = None
-                else:
-                    block_dc_rate = drop_connect_rate * block_id / n_blocks
-
-                se_size = max(1, block_in_channels // block_arg[6])
-                _block = MBConvBlock(input_spatial_shape=spatial_shape,
-                                     in_channels=block_in_channels,
-                                     expansion_factor=expansion_factor,
-                                     kernel_size=kernel_size,
-                                     out_channels=block_out_channels,
-                                     stride=stride,
-                                     se_size=se_size,
-                                     activation=self.activation,
-                                     bn_epsilon=bn_epsilon,
-                                     bn_momentum=bn_momentum,
-                                     drop_connect_rate=block_dc_rate,
-                                     bias=bias)
-                spatial_shape = _block.out_spatial_shape
-                self.blocks.append(_block)
-
-                # remaining MBConv blocks of the group have stride 1 and in_channels=out_channels
-                stride = 1
-                block_in_channels = block_out_channels
-                block_id += 1
+            stage = EnetStage(num_layers=stage_num_layers,
+                              input_spatial_shape=spatial_shape,
+                              in_channels=stage_in_channels,
+                              out_channels=stage_out_channels,
+                              stride=stride,
+                              se_ratio=stage_se_ratio,
+                              drop_connect_rates=stage_dc_rates,
+                              kernel_size=kernel_size,
+                              expansion_factor=expansion_factor,
+                              activation=self.activation,
+                              bn_epsilon=bn_epsilon,
+                              bn_momentum=bn_momentum,
+                              bias=bias
+                              )
+            self.stages.append(stage)
+            spatial_shape = stage.out_spatial_shape
+            mbconv_idx += stage_num_layers
 
         head_conv_out_channels = round_filters(1280, width_coefficient)
-        self.head_conv = nn.Conv2d(in_channels=self.blocks[-1].project_conv.out_channels,
+        head_conv_in_channels = self.stages[-1].layers[-1].project_conv.out_channels
+        self.head_conv = ConvBNAct(in_channels=head_conv_in_channels,
                                    out_channels=head_conv_out_channels,
                                    kernel_size=(1, 1),
-                                   bias=bias)
-        self.head_bn = nn.BatchNorm2d(head_conv_out_channels,
-                                      eps=bn_epsilon, momentum=bn_momentum)
+                                   bias=bias,
+                                   activation=self.activation,
+                                   bn_epsilon=bn_epsilon,
+                                   bn_momentum=bn_momentum)
 
-        if dropout_rate > 0:
-            self.dropout_enabled = True
-            self.dropout = nn.Dropout(p=dropout_rate)
+        if self.dropout_rate > 0:
+            self.dropout = nn.Dropout(p=self.dropout_rate)
         else:
-            self.dropout_enabled = False
+            self.dropout = None
 
         self.avpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(head_conv_out_channels, n_classes)
@@ -458,11 +516,68 @@ class EfficientNet(nn.Module):
         if pretrained:
             self._load_state(self.b, in_channels, n_classes, progress)
 
+    @property
+    def num_stages(self):
+        return len(EfficientNet.stage_args)
+
+    @property
+    def width_coefficient(self):
+        return EfficientNet.coefficients[self.b][0]
+
+    @property
+    def depth_coefficient(self):
+        return EfficientNet.coefficients[self.b][1]
+
+    @property
+    def dropout_rate(self):
+        if self._override_dropout_rate is None:
+            return EfficientNet.coefficients[self.b][2]
+        else:
+            return self._override_dropout_rate
+
+    def get_stage_kernel_size(self, stage):
+        return EfficientNet.stage_args[stage][1]
+
+    def get_stage_stride(self, stage):
+        return EfficientNet.stage_args[stage][2]
+
+    def get_stage_expansion_factor(self, stage):
+        return EfficientNet.stage_args[stage][3]
+
+    def get_stage_in_channels(self, stage):
+        width_coefficient = self.width_coefficient
+        in_channels = EfficientNet.stage_args[stage][4]
+        return round_filters(in_channels, width_coefficient)
+
+    def get_stage_out_channels(self, stage):
+        width_coefficient = self.width_coefficient
+        out_channels = EfficientNet.stage_args[stage][5]
+        return round_filters(out_channels, width_coefficient)
+
+    def get_stage_se_ratio(self, stage):
+        return EfficientNet.stage_args[stage][6]
+
+    def get_stage_num_layers(self, stage):
+        depth_coefficient = self.depth_coefficient
+        num_layers = EfficientNet.stage_args[stage][0]
+        return round_repeats(num_layers, depth_coefficient)
+
+    def get_num_mbconv_layers(self):
+        total = 0
+        for i in range(self.num_stages):
+            total += self.get_stage_num_layers(i)
+        return total
+
+    def get_dc_rates(self):
+        total_mbconv_layers = self.get_num_mbconv_layers()
+        return [self.drop_connect_rate * i / total_mbconv_layers
+                for i in range(total_mbconv_layers)]
+
     def _load_state(self, b, in_channels, n_classes, progress):
         state_dict = model_zoo.load_url(EfficientNet.state_dict_urls[b], progress=progress)
         strict = True
         if in_channels != 3:
-            state_dict.pop('init_conv.weight')
+            state_dict.pop('init_conv.conv.conv.weight')
             strict = False
         if n_classes != 1000:
             state_dict.pop('fc.weight')
@@ -479,18 +594,18 @@ class EfficientNet(nn.Module):
                                                                                   x.size(1)))
 
     @staticmethod
-    def _check_init_params(b,
-                           in_channels,
-                           n_classes,
-                           input_spatial_shape,
-                           activation,
-                           bias,
-                           drop_connect_rate,
-                           override_dropout_rate,
-                           bn_epsilon,
-                           bn_momentum,
-                           pretrained,
-                           progress):
+    def check_init_params(b,
+                          in_channels,
+                          n_classes,
+                          input_spatial_shape,
+                          activation,
+                          bias,
+                          drop_connect_rate,
+                          override_dropout_rate,
+                          bn_epsilon,
+                          bn_momentum,
+                          pretrained,
+                          progress):
 
         if not isinstance(b, int):
             raise ValueError("b must be int, got {} instead".format(type(b)))
@@ -529,10 +644,10 @@ class EfficientNet(nn.Module):
 
         if override_dropout_rate is not None:
             if not isinstance(override_dropout_rate, float):
-                raise ValueError("override_dropout_rate must be either None or float, "
+                raise ValueError("dropout_rate must be either None or float, "
                                  "got {} instead".format(type(override_dropout_rate)))
             elif not 0 <= override_dropout_rate < 1.0:
-                raise ValueError("override_dropout_rate must be within range 0 <= override_dropout_rate < 1.0, "
+                raise ValueError("dropout_rate must be within range 0 <= dropout_rate < 1.0, "
                                  "got {} instead".format(override_dropout_rate))
 
         if not isinstance(bn_epsilon, float):
@@ -547,24 +662,25 @@ class EfficientNet(nn.Module):
         if not isinstance(progress, bool):
             raise ValueError("progress must be bool, got {} instead".format(type(progress)))
 
+    def get_features(self, x):
+        x = self.init_conv(x)
+        out = []
+        for stage in self.stages:
+            x = stage(x)
+            out.append(x)
+        return out
+
     def forward(self, x):
         self.check_input(x)
 
-        x = self.init_conv(x)
-        x = self.init_bn(x)
-        x = self.activation(x)
-
-        for block in self.blocks:
-            x = block(x)
+        x = self.get_features(x)[-1]
 
         x = self.head_conv(x)
-        x = self.head_bn(x)
-        x = self.activation(x)
 
         x = self.avpool(x)
         x = torch.flatten(x, 1)
 
-        if self.dropout_enabled:
+        if self.dropout is not None:
             x = self.dropout(x)
         x = self.fc(x)
 

@@ -5,6 +5,37 @@ as introduced in
 [\[Tan & Le 2019\]: EfficientNet: Rethinking Model Scaling
 for Convolutional Neural Networks](https://arxiv.org/abs/1905.11946)
 
+#### Usage
+The example below creates an EfficientNet-B0
+model that takes 3-channel image of shape (256, 320) as input and
+outputs distribution over 50 classes, model weights are initialized
+with weights pretrained on ImageNet dataset:
+```python
+from efficientnet import EfficientNet
+model = EfficientNet(b=0,
+                  in_channels=3,
+                  n_classes=50,
+                  input_spatial_shape=(256,320),
+                  pretrained=True
+                  )
+# x - tensor of shape [batch_size, in_channels, image_height, image_width]
+
+ # to get predictions:
+ pred = model(x) 
+ 
+ # to extract features:
+ features = model.get_features(x)
+ ```
+```pred``` is now a tensor containing output logits while 
+```features``` is a list of 7 tensors representing outputs
+of each of the EfiicientNet's 7 intermediate convolutional stages.
+
+If you would like to experiment with this implementation
+(e.g. try out different hyper-parameters) feel free to 
+run [cifar100_train.ipynb](cifar100_train.ipynb) which contains a 
+baseline CIFAR-100 training routine.
+
+ 
 #### Parameters
  
 * ***b***, *(int)* - Model index, e.g. 1 for EfficientNet-B1.
@@ -21,10 +52,9 @@ If None, default image shape will be used for each model index.
 *(Default=False)* - Whether to enable bias in convolution operations.
 * ***drop_connect_rate***, *(float)*, 
 *(Default=0.2)* - DropConnect rate, set to 0 to disable DropConnect.
-* ***override_dropout_rate***, *(float or None)*, 
+* ***dropout_rate***, *(float or None)*, 
 *(Default=None)* - override default dropout rate with this value,
-if *None* is provided, the default dropout rate will be used 
-for each model index.
+if *None* is provided, the default dropout rate will be used.
 * ***bn_epsilon***, *(float)*, 
 *(Default=0.001)* - Batch normalizaton epsilon.
 * ***bn_momentum***, *(float)*, 
@@ -41,21 +71,18 @@ The default parameter values are the ones that were used in
 
 #### Evaluation
 A simple script to evaluate pretrained models against Imagenet 
-validation set is provided in [this notebook](imagenet_eval.ipynb).
+validation set is provided in [imagenet_eval.ipynb](imagenet_eval.ipynb).
 
-Validation set accuracies achieved by this implementation against ImageNet
+Accuracy scores achieved by this implementation against ImageNet
 dataset:
 
 | Model | Accuracy, % |
 | --- | --- |
-| B0 | 76.43% |
-| B1 | 78.396% |
-| B2 | 79.804% |
-| B3 | 81.542% |
-| B4 | 83.036% |
-| B5 | 83.79% |
-| B6 | 84.136% |
-| B7 | 84.578% |
-
-#### Coming soon
-\>\> A sample training script
+| EfficientNet-B0 | 76.43% |
+| EfficientNet-B1 | 78.396% |
+| EfficientNet-B2 | 79.804% |
+| EfficientNet-B3 | 81.542% |
+| EfficientNet-B4 | 83.036% |
+| EfficientNet-B5 | 83.79% |
+| EfficientNet-B6 | 84.136% |
+| EfficientNet-B7 | 84.578% |
