@@ -7,15 +7,16 @@ for Convolutional Neural Networks](https://arxiv.org/abs/1905.11946)
 
 #### Usage
 The example below creates an EfficientNet-B0
-model that takes 3-channel image of shape (256, 320) as input and
-outputs distribution over 50 classes, model weights are initialized
+model that takes 3-channel image of shape \[256, 320\] (height, width)
+as input and outputs distribution over 50 classes, 
+model weights are initialized
 with weights pretrained on ImageNet dataset:
 ```python
 from efficientnet import EfficientNet
 model = EfficientNet(b=0,
                   in_channels=3,
                   n_classes=50,
-                  input_spatial_shape=(256,320),
+                  in_spatial_shape=(256,320),
                   pretrained=True
                   )
 # x - tensor of shape [batch_size, in_channels, image_height, image_width]
@@ -42,8 +43,8 @@ baseline CIFAR-100 training routine.
 * ***in_channels***, *(int)*, *(Default=3)* - Number of channels in input image.
 * ***n_classes***, *(int)*, *(Default=1000)* - Number of 
 output classes.
-* ***input_spatial_shape***, *(int or iterable of ints)*, 
-*(Default=None)* - Spatial dimensionality of input image, e.g
+* ***in_spatial_shape***, *(int or iterable of ints)*, 
+*(Default=None)* - Spatial dimensionality of input image, tuple
  (height, width) or single integer *size* for shape (*size*, *size*). 
 If None, default image shape will be used for each model index. 
 * ***activation***, *(callable)*, 
@@ -73,7 +74,7 @@ The default parameter values are the ones that were used in
 A simple script to evaluate pretrained models against Imagenet 
 validation set is provided in [imagenet_eval.ipynb](imagenet_eval.ipynb).
 
-Accuracy scores achieved by this implementation against ImageNet
+Accuracy achieved by models with pre-trained weights against ImageNet
 dataset:
 
 | Model | Accuracy, % |

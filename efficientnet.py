@@ -15,7 +15,7 @@ def _pair(x):
 
 class SamePaddingConv2d(nn.Module):
     def __init__(self,
-                 input_spatial_shape,
+                 in_spatial_shape,
                  in_channels,
                  out_channels,
                  kernel_size,
@@ -24,12 +24,12 @@ class SamePaddingConv2d(nn.Module):
                  **kwargs):
         super(SamePaddingConv2d, self).__init__()
 
-        self.input_spatial_shape = _pair(input_spatial_shape)
+        self._in_spatial_shape = _pair(in_spatial_shape)
         kernel_size = _pair(kernel_size)
         stride = _pair(stride)
         dilation = _pair(dilation)
 
-        in_height, in_width = self.input_spatial_shape
+        in_height, in_width = self._in_spatial_shape
         filter_height, filter_width = kernel_size
         stride_heigth, stride_width = stride
         dilation_height, dilation_width = dilation
@@ -58,11 +58,28 @@ class SamePaddingConv2d(nn.Module):
                               stride=stride,
                               dilation=dilation,
                               **kwargs)
-        self.out_spatial_shape = (out_height, out_width)
+
+        self._out_spatial_shape = (out_height, out_width)
+
+    @property
+    def in_spatial_shape(self):
+        return self._in_spatial_shape
+
+    @property
+    def out_spatial_shape(self):
+        return self._out_spatial_shape
+
+    @property
+    def in_channels(self):
+        return self.conv.in_channels
+
+    @property
+    def out_channels(self):
+        return self.conv.out_channels
 
     def check_input(self, x):
-        if x.size(2) != self.input_spatial_shape[0] or \
-                x.size(3) != self.input_spatial_shape[1]:
+        if x.size(2) != self.in_spatial_shape[0] or \
+                x.size(3) != self.in_spatial_shape[1]:
             raise ValueError("input spatial shape mismatch")
 
     def forward(self, x):
@@ -94,7 +111,13 @@ class ConvBNAct(nn.Module):
 
         self.bn = nn.BatchNorm2d(out_channels, **bn_kwargs)
         self.activation = activation
-        self.out_channels = out_channels
+
+    @property
+    def in_spatial_shape(self):
+        if isinstance(self.conv, SamePaddingConv2d):
+            return self.conv.in_spatial_shape
+        else:
+            return None
 
     @property
     def out_spatial_shape(self):
@@ -102,6 +125,14 @@ class ConvBNAct(nn.Module):
             return self.conv.out_spatial_shape
         else:
             return None
+
+    @property
+    def in_channels(self):
+        return self.conv.in_channels
+
+    @property
+    def out_channels(self):
+        return self.conv.out_channels
 
     def forward(self, x):
         x = self.conv(x)
@@ -182,7 +213,7 @@ class SqueezeExcitate(nn.Module):
 
 class MBConvBlock(nn.Module):
     def __init__(self,
-                 input_spatial_shape,
+                 in_spatial_shape,
                  in_channels,
                  out_channels,
                  kernel_size,
@@ -196,7 +227,7 @@ class MBConvBlock(nn.Module):
                  bias=False):
         """
         Initialize new MBConv block
-        :param input_spatial_shape: image shape, e.g. [height, width] or int size for [size, size]
+        :param in_spatial_shape: image shape, e.g. tuple [height, width] or int size for [size, size]
         :param in_channels: number of input channels
         :param out_channels: number of output channels
         :param kernel_size: kernel size for depth-wise convolution
@@ -240,7 +271,7 @@ class MBConvBlock(nn.Module):
 
         # depth-wise convolution
         self.dp_conv = ConvBNAct(
-            input_spatial_shape=input_spatial_shape,
+            in_spatial_shape=in_spatial_shape,
             in_channels=exp_channels,
             out_channels=exp_channels,
             kernel_size=kernel_size,
@@ -251,7 +282,6 @@ class MBConvBlock(nn.Module):
             same_padding=True,
             bn_epsilon=bn_epsilon,
             bn_momentum=bn_momentum)
-        self.out_spatial_shape = self.dp_conv.out_spatial_shape
 
         if se_size is not None:
             self.se = SqueezeExcitate(exp_channels,
@@ -278,6 +308,22 @@ class MBConvBlock(nn.Module):
                                       activation=None,
                                       bn_epsilon=bn_epsilon,
                                       bn_momentum=bn_momentum)
+
+    @property
+    def in_spatial_shape(self):
+        return self.dp_conv.in_spatial_shape
+
+    @property
+    def out_spatial_shape(self):
+        return self.dp_conv.out_spatial_shape
+
+    @property
+    def in_channels(self):
+        return self.expand_conv.in_channels
+
+    @property
+    def out_channels(self):
+        return self.project_conv.out_channels
 
     def forward(self, x):
         inp = x
@@ -307,7 +353,7 @@ class MBConvBlock(nn.Module):
 class EnetStage(nn.Module):
     def __init__(self,
                  num_layers,
-                 input_spatial_shape,
+                 in_spatial_shape,
                  in_channels,
                  out_channels,
                  stride,
@@ -317,9 +363,10 @@ class EnetStage(nn.Module):
         super(EnetStage, self).__init__()
         self.num_layers = num_layers
         self.layers = nn.ModuleList()
+        spatial_shape = in_spatial_shape
         for i in range(self.num_layers):
             se_size = max(1, in_channels // se_ratio)
-            layer = MBConvBlock(input_spatial_shape=input_spatial_shape,
+            layer = MBConvBlock(in_spatial_shape=spatial_shape,
                                 in_channels=in_channels,
                                 out_channels=out_channels,
                                 stride=stride,
@@ -327,12 +374,26 @@ class EnetStage(nn.Module):
                                 drop_connect_rate=drop_connect_rates[i],
                                 **kwargs)
             self.layers.append(layer)
-            input_spatial_shape = layer.out_spatial_shape
+            spatial_shape = layer.out_spatial_shape
             # remaining MBConv blocks have stride 1 and in_channels=out_channels
             stride = 1
             in_channels = out_channels
 
-        self.out_spatial_shape = input_spatial_shape
+    @property
+    def in_spatial_shape(self):
+        return self.layers[0].in_spatial_shape
+
+    @property
+    def out_spatial_shape(self):
+        return self.layers[-1].out_spatial_shape
+
+    @property
+    def in_channels(self):
+        return self.layers[0].in_channels
+
+    @property
+    def out_channels(self):
+        return self.layers[-1].out_channels
 
     def forward(self, x):
         for layer in self.layers:
@@ -358,7 +419,7 @@ def round_repeats(repeats, depth_coefficient):
 
 
 class EfficientNet(nn.Module):
-    # (width_coefficient, depth_coefficient, dropout_rate, input_spatial_shape)
+    # (width_coefficient, depth_coefficient, dropout_rate, in_spatial_shape)
     coefficients = [
         (1.0, 1.0, 0.2, 224),
         (1.0, 1.1, 0.2, 240),
@@ -396,7 +457,7 @@ class EfficientNet(nn.Module):
                  b,
                  in_channels=3,
                  n_classes=1000,
-                 input_spatial_shape=None,
+                 in_spatial_shape=None,
                  activation=Swish(),
                  bias=False,
                  drop_connect_rate=0.2,
@@ -410,7 +471,7 @@ class EfficientNet(nn.Module):
         :param b: model index, i.e. 0 for EfficientNet-B0
         :param in_channels: number of input channels
         :param n_classes: number of output classes
-        :param input_spatial_shape: input image shape
+        :param in_spatial_shape: input image shape
         :param activation: activation function
         :param bias: enable bias in convolution operations
         :param drop_connect_rate: DropConnect rate
@@ -427,7 +488,7 @@ class EfficientNet(nn.Module):
         EfficientNet.check_init_params(b,
                                        in_channels,
                                        n_classes,
-                                       input_spatial_shape,
+                                       in_spatial_shape,
                                        activation,
                                        bias,
                                        drop_connect_rate,
@@ -445,14 +506,14 @@ class EfficientNet(nn.Module):
 
         width_coefficient, _, _, spatial_shape = EfficientNet.coefficients[self.b]
 
-        if input_spatial_shape is not None:
-            self.input_spatial_shape = _pair(input_spatial_shape)
+        if in_spatial_shape is not None:
+            self.in_spatial_shape = _pair(in_spatial_shape)
         else:
-            self.input_spatial_shape = _pair(spatial_shape)
+            self.in_spatial_shape = _pair(spatial_shape)
 
         # initial convolution
         init_conv_out_channels = round_filters(32, width_coefficient)
-        self.init_conv = ConvBNAct(input_spatial_shape=self.input_spatial_shape,
+        self.init_conv = ConvBNAct(in_spatial_shape=self.in_spatial_shape,
                                    in_channels=self.in_channels,
                                    out_channels=init_conv_out_channels,
                                    kernel_size=(3, 3),
@@ -478,7 +539,7 @@ class EfficientNet(nn.Module):
             stage_se_ratio = self.get_stage_se_ratio(stage_id)
 
             stage = EnetStage(num_layers=stage_num_layers,
-                              input_spatial_shape=spatial_shape,
+                              in_spatial_shape=spatial_shape,
                               in_channels=stage_in_channels,
                               out_channels=stage_out_channels,
                               stride=stride,
@@ -597,7 +658,7 @@ class EfficientNet(nn.Module):
     def check_init_params(b,
                           in_channels,
                           n_classes,
-                          input_spatial_shape,
+                          in_spatial_shape,
                           activation,
                           bias,
                           drop_connect_rate,
@@ -622,13 +683,13 @@ class EfficientNet(nn.Module):
         elif not n_classes > 0:
             raise ValueError("n_classes must be > 0, got {} instead".format(n_classes))
 
-        if not (input_spatial_shape is None or
-                isinstance(input_spatial_shape, int) or
-                (isinstance(input_spatial_shape, container_abcs.Iterable) and
-                 len(input_spatial_shape) == 2 and
-                 all(isinstance(s, int) for s in input_spatial_shape))):
-            raise ValueError("input_spatial_shape must be either None, int or iterable of ints of length 2"
-                             ", got {} instead".format(input_spatial_shape))
+        if not (in_spatial_shape is None or
+                isinstance(in_spatial_shape, int) or
+                (isinstance(in_spatial_shape, container_abcs.Iterable) and
+                 len(in_spatial_shape) == 2 and
+                 all(isinstance(s, int) for s in in_spatial_shape))):
+            raise ValueError("in_spatial_shape must be either None, int or iterable of ints of length 2"
+                             ", got {} instead".format(in_spatial_shape))
 
         if activation is not None and not callable(activation):
             raise ValueError("activation must be callable but is not")
@@ -663,6 +724,9 @@ class EfficientNet(nn.Module):
             raise ValueError("progress must be bool, got {} instead".format(type(progress)))
 
     def get_features(self, x):
+
+        self.check_input(x)
+
         x = self.init_conv(x)
         out = []
         for stage in self.stages:
@@ -671,7 +735,6 @@ class EfficientNet(nn.Module):
         return out
 
     def forward(self, x):
-        self.check_input(x)
 
         x = self.get_features(x)[-1]
 
