@@ -270,18 +270,17 @@ class MBConvBlock(nn.Module):
             self.expand_conv = None
 
         # depth-wise convolution
-        self.dp_conv = ConvBNAct(
-            in_spatial_shape=in_spatial_shape,
-            in_channels=exp_channels,
-            out_channels=exp_channels,
-            kernel_size=kernel_size,
-            stride=stride,
-            groups=exp_channels,
-            bias=bias,
-            activation=self.activation,
-            same_padding=True,
-            bn_epsilon=bn_epsilon,
-            bn_momentum=bn_momentum)
+        self.dp_conv = ConvBNAct(in_spatial_shape=in_spatial_shape,
+                                 in_channels=exp_channels,
+                                 out_channels=exp_channels,
+                                 kernel_size=kernel_size,
+                                 stride=stride,
+                                 groups=exp_channels,
+                                 bias=bias,
+                                 activation=self.activation,
+                                 same_padding=True,
+                                 bn_epsilon=bn_epsilon,
+                                 bn_momentum=bn_momentum)
 
         if se_size is not None:
             self.se = SqueezeExcitate(exp_channels,
@@ -319,7 +318,10 @@ class MBConvBlock(nn.Module):
 
     @property
     def in_channels(self):
-        return self.expand_conv.in_channels
+        if self.expand_conv is not None:
+            return self.expand_conv.in_channels
+        else:
+            return self.dp_conv.in_channels
 
     @property
     def out_channels(self):
@@ -361,6 +363,15 @@ class EnetStage(nn.Module):
                  drop_connect_rates,
                  **kwargs):
         super(EnetStage, self).__init__()
+
+        if not (isinstance(num_layers, int) and num_layers >= 1):
+            raise ValueError("num_layers must be int and >=1, got {} instead".format(num_layers))
+
+        if not (isinstance(drop_connect_rates, container_abcs.Iterable) and
+                len(drop_connect_rates) == num_layers):
+            raise ValueError("drop_connect_rates must be iterable of "
+                             "length num_layers ({}), got {} instead".format(num_layers, drop_connect_rates))
+
         self.num_layers = num_layers
         self.layers = nn.ModuleList()
         spatial_shape = in_spatial_shape
