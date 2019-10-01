@@ -87,3 +87,7 @@ dataset:
 | EfficientNet-B5 | 83.79% |
 | EfficientNet-B6 | 84.136% |
 | EfficientNet-B7 | 84.578% |
+
+#### Requirements
+* Python v3.5+
+* Pytorch v1.0+
