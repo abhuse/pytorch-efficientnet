@@ -21,10 +21,14 @@ class SamePaddingConv2d(nn.Module):
                  kernel_size,
                  stride,
                  dilation=1,
+                 enforce_in_spatial_shape=True,
                  **kwargs):
         super(SamePaddingConv2d, self).__init__()
 
         self._in_spatial_shape = _pair(in_spatial_shape)
+        # e.g. throw exception if input spatial shape does not match in_spatial_shape
+        # when calling self.forward()
+        self.enforce_in_spatial_shape = enforce_in_spatial_shape
         kernel_size = _pair(kernel_size)
         stride = _pair(stride)
         dilation = _pair(dilation)
@@ -77,13 +81,16 @@ class SamePaddingConv2d(nn.Module):
     def out_channels(self):
         return self.conv.out_channels
 
-    def check_input(self, x):
+    def check_spatial_shape(self, x):
         if x.size(2) != self.in_spatial_shape[0] or \
                 x.size(3) != self.in_spatial_shape[1]:
-            raise ValueError("input spatial shape mismatch")
+            raise ValueError(
+                "Expected input spatial shape {}, got {} instead".format(self.in_spatial_shape,
+                                                                         x.shape[2:]))
 
     def forward(self, x):
-        self.check_input(x)
+        if self.enforce_in_spatial_shape:
+            self.check_spatial_shape(x)
         if self.zero_pad is not None:
             x = self.zero_pad(x)
         x = self.conv(x)
