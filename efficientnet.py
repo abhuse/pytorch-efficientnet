@@ -21,7 +21,7 @@ class SamePaddingConv2d(nn.Module):
                  kernel_size,
                  stride,
                  dilation=1,
-                 enforce_in_spatial_shape=True,
+                 enforce_in_spatial_shape=False,
                  **kwargs):
         super(SamePaddingConv2d, self).__init__()
 
