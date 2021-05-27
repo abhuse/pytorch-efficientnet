@@ -461,14 +461,25 @@ class EfficientNet(nn.Module):
     ]
 
     state_dict_urls = [
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b0-d86f8792.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b1-82896633.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b2-e4b93854.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b3-3b9ca610.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b4-24436ca5.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b5-d8e577e8.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b6-f20845c7.pth",
-        "https://storage.googleapis.com/abhuse/pretrained_models/efficientnet/efficientnet-b7-86e8e374.pth",
+        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmliYV9HaE5PWWVEbXVMd3c/root/content",
+        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlicV9HaE5PWWVEbXVMd3c/root/content",
+        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmliNl9HaE5PWWVEbXVMd3c/root/content",
+        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmljS19HaE5PWWVEbXVMd3c/root/content",
+        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmljYV9HaE5PWWVEbXVMd3c/root/content",
+        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmljcV9HaE5PWWVEbXVMd3c/root/content",
+        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmljNl9HaE5PWWVEbXVMd3c/root/content",
+        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlkS19HaE5PWWVEbXVMd3c/root/content",
+    ]
+
+    dict_names = [
+        'efficientnet-b0-d86f8792.pth',
+        'efficientnet-b1-82896633.pth',
+        'efficientnet-b2-e4b93854.pth',
+        'efficientnet-b3-3b9ca610.pth',
+        'efficientnet-b4-24436ca5.pth',
+        'efficientnet-b5-d8e577e8.pth',
+        'efficientnet-b6-f20845c7.pth',
+        'efficientnet-b7-86e8e374.pth'
     ]
 
     def __init__(self,
@@ -653,7 +664,7 @@ class EfficientNet(nn.Module):
                 for i in range(total_mbconv_layers)]
 
     def _load_state(self, b, in_channels, n_classes, progress):
-        state_dict = model_zoo.load_url(EfficientNet.state_dict_urls[b], progress=progress)
+        state_dict = model_zoo.load_url(EfficientNet.state_dict_urls[b], progress=progress, file_name=EfficientNet.dict_names[b])
         strict = True
         if in_channels != 3:
             state_dict.pop('init_conv.conv.conv.weight')
