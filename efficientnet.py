@@ -3,7 +3,7 @@ from math import ceil
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch._six import container_abcs
+import collections.abc as container_abcs
 from torch.utils import model_zoo
 
 
