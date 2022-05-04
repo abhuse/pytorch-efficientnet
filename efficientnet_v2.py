@@ -1,10 +1,10 @@
+import collections.abc as container_abc
 from collections import OrderedDict
 from math import ceil, floor
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import collections.abc as container_abc
 from torch.utils import model_zoo
 
 
@@ -50,13 +50,8 @@ def get_activation(act_fn: str, **kwargs):
 def round_filters(filters, width_coefficient, depth_divisor=8):
     """Round number of filters based on depth multiplier."""
     min_depth = depth_divisor
-
     filters *= width_coefficient
-    new_filters = max(min_depth, int(
-        filters + depth_divisor / 2) // depth_divisor * depth_divisor)
-    # Make sure that round down does not go down by more than 10%.
-    if new_filters < 0.9 * filters:
-        new_filters += depth_divisor
+    new_filters = max(min_depth, int(filters + depth_divisor / 2) // depth_divisor * depth_divisor)
     return int(new_filters)
 
 
@@ -73,8 +68,7 @@ class DropConnect(nn.Module):
 
     def set_rate(self, rate):
         if not 0 <= rate < 1:
-            raise ValueError(
-                "rate must be 0<=rate<1, got {} instead".format(rate))
+            raise ValueError("rate must be 0<=rate<1, got {} instead".format(rate))
         self.keep_prob = 1 - rate
 
     def forward(self, x):
@@ -148,8 +142,7 @@ class SamePaddingConv2d(nn.Module):
         if x.size(2) != self._in_spatial_shape[0] or \
                 x.size(3) != self._in_spatial_shape[1]:
             raise ValueError(
-                "Expected input spatial shape {}, got {} instead".format(self._in_spatial_shape,
-                                                                         x.shape[2:]))
+                "Expected input spatial shape {}, got {} instead".format(self._in_spatial_shape, x.shape[2:]))
 
     def forward(self, x):
         if self.enforce_in_spatial_shape:
@@ -192,7 +185,7 @@ class MBConvBlockV2(nn.Module):
                  stride,
                  expansion_factor,
                  act_fn,
-                 act_kwargs={},
+                 act_kwargs=None,
                  bn_epsilon=None,
                  bn_momentum=None,
                  se_size=None,
@@ -203,58 +196,52 @@ class MBConvBlockV2(nn.Module):
 
         super().__init__()
 
+        if act_kwargs is None:
+            act_kwargs = {}
         exp_channels = in_channels * expansion_factor
 
         self.ops_lst = []
 
         # expansion convolution
         if expansion_factor != 1:
-            self.expand_conv = nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=exp_channels,
-                kernel_size=1,
-                bias=bias)
+            self.expand_conv = nn.Conv2d(in_channels=in_channels,
+                                         out_channels=exp_channels,
+                                         kernel_size=1,
+                                         bias=bias)
 
-            self.expand_bn = nn.BatchNorm2d(
-                num_features=exp_channels,
-                eps=bn_epsilon,
-                momentum=bn_momentum)
+            self.expand_bn = nn.BatchNorm2d(num_features=exp_channels,
+                                            eps=bn_epsilon,
+                                            momentum=bn_momentum)
 
             self.expand_act = get_activation(act_fn, **act_kwargs)
-            self.ops_lst.extend(
-                [self.expand_conv, self.expand_bn, self.expand_act])
+            self.ops_lst.extend([self.expand_conv, self.expand_bn, self.expand_act])
 
         # depth-wise convolution
         if tf_style_conv:
-            self.dp_conv = SamePaddingConv2d(
-                in_spatial_shape=in_spatial_shape,
-                in_channels=exp_channels,
-                out_channels=exp_channels,
-                kernel_size=kernel_size,
-                stride=stride,
-                groups=exp_channels,
-                bias=bias)
+            self.dp_conv = SamePaddingConv2d(in_spatial_shape=in_spatial_shape,
+                                             in_channels=exp_channels,
+                                             out_channels=exp_channels,
+                                             kernel_size=kernel_size,
+                                             stride=stride,
+                                             groups=exp_channels,
+                                             bias=bias)
             self.out_spatial_shape = self.dp_conv.out_spatial_shape
         else:
-            self.dp_conv = nn.Conv2d(
-                in_channels=exp_channels,
-                out_channels=exp_channels,
-                kernel_size=kernel_size,
-                stride=stride,
-                padding=1,
-                groups=exp_channels,
-                bias=bias)
-            self.out_spatial_shape = torch_conv_out_spatial_shape(
-                in_spatial_shape, kernel_size, stride)
+            self.dp_conv = nn.Conv2d(in_channels=exp_channels,
+                                     out_channels=exp_channels,
+                                     kernel_size=kernel_size,
+                                     stride=stride,
+                                     padding=1,
+                                     groups=exp_channels,
+                                     bias=bias)
+            self.out_spatial_shape = torch_conv_out_spatial_shape(in_spatial_shape, kernel_size, stride)
 
-        self.dp_bn = nn.BatchNorm2d(
-            num_features=exp_channels,
-            eps=bn_epsilon,
-            momentum=bn_momentum)
+        self.dp_bn = nn.BatchNorm2d(num_features=exp_channels,
+                                    eps=bn_epsilon,
+                                    momentum=bn_momentum)
 
         self.dp_act = get_activation(act_fn, **act_kwargs)
-        self.ops_lst.extend(
-            [self.dp_conv, self.dp_bn, self.dp_act])
+        self.ops_lst.extend([self.dp_conv, self.dp_bn, self.dp_act])
 
         # Squeeze and Excitate
         if se_size is not None:
@@ -264,21 +251,18 @@ class MBConvBlockV2(nn.Module):
             self.ops_lst.append(self.se)
 
         # projection layer
-        self.project_conv = nn.Conv2d(
-            in_channels=exp_channels,
-            out_channels=out_channels,
-            kernel_size=1,
-            bias=bias)
+        self.project_conv = nn.Conv2d(in_channels=exp_channels,
+                                      out_channels=out_channels,
+                                      kernel_size=1,
+                                      bias=bias)
 
-        self.project_bn = nn.BatchNorm2d(
-            num_features=out_channels,
-            eps=bn_epsilon,
-            momentum=bn_momentum)
+        self.project_bn = nn.BatchNorm2d(num_features=out_channels,
+                                         eps=bn_epsilon,
+                                         momentum=bn_momentum)
 
         # no activation function in projection layer
 
-        self.ops_lst.extend(
-            [self.project_conv, self.project_bn])
+        self.ops_lst.extend([self.project_conv, self.project_bn])
 
         self.skip_enabled = in_channels == out_channels and stride == 1
 
@@ -304,7 +288,7 @@ class FusedMBConvBlockV2(nn.Module):
                  stride,
                  expansion_factor,
                  act_fn,
-                 act_kwargs={},
+                 act_kwargs=None,
                  bn_epsilon=None,
                  bn_momentum=None,
                  se_size=None,
@@ -315,37 +299,38 @@ class FusedMBConvBlockV2(nn.Module):
 
         super().__init__()
 
+        if act_kwargs is None:
+            act_kwargs = {}
         exp_channels = in_channels * expansion_factor
 
         self.ops_lst = []
 
         # expansion convolution
+        expansion_out_shape = in_spatial_shape
         if expansion_factor != 1:
             if tf_style_conv:
-                self.expand_conv = SamePaddingConv2d(
-                    in_spatial_shape=in_spatial_shape,
-                    in_channels=in_channels,
-                    out_channels=exp_channels,
-                    kernel_size=kernel_size,
-                    stride=stride,
-                    bias=bias)
+                self.expand_conv = SamePaddingConv2d(in_spatial_shape=in_spatial_shape,
+                                                     in_channels=in_channels,
+                                                     out_channels=exp_channels,
+                                                     kernel_size=kernel_size,
+                                                     stride=stride,
+                                                     bias=bias)
+                expansion_out_shape = self.expand_conv.out_spatial_shape
             else:
-                self.expand_conv = nn.Conv2d(
-                    in_channels=in_channels,
-                    out_channels=exp_channels,
-                    kernel_size=kernel_size,
-                    padding=1,
-                    stride=stride,
-                    bias=bias)
+                self.expand_conv = nn.Conv2d(in_channels=in_channels,
+                                             out_channels=exp_channels,
+                                             kernel_size=kernel_size,
+                                             padding=1,
+                                             stride=stride,
+                                             bias=bias)
+                expansion_out_shape = torch_conv_out_spatial_shape(in_spatial_shape, kernel_size, stride)
 
-            self.expand_bn = nn.BatchNorm2d(
-                num_features=exp_channels,
-                eps=bn_epsilon,
-                momentum=bn_momentum)
+            self.expand_bn = nn.BatchNorm2d(num_features=exp_channels,
+                                            eps=bn_epsilon,
+                                            momentum=bn_momentum)
 
             self.expand_act = get_activation(act_fn, **act_kwargs)
-            self.ops_lst.extend(
-                [self.expand_conv, self.expand_bn, self.expand_act])
+            self.ops_lst.extend([self.expand_conv, self.expand_bn, self.expand_act])
 
         # Squeeze and Excitate
         if se_size is not None:
@@ -358,29 +343,25 @@ class FusedMBConvBlockV2(nn.Module):
         kernel_size = 1 if expansion_factor != 1 else kernel_size
         stride = 1 if expansion_factor != 1 else stride
         if tf_style_conv:
-            self.project_conv = SamePaddingConv2d(
-                in_spatial_shape=in_spatial_shape,
-                in_channels=exp_channels,
-                out_channels=out_channels,
-                kernel_size=kernel_size,
-                stride=stride,
-                bias=bias)
+            self.project_conv = SamePaddingConv2d(in_spatial_shape=expansion_out_shape,
+                                                  in_channels=exp_channels,
+                                                  out_channels=out_channels,
+                                                  kernel_size=kernel_size,
+                                                  stride=stride,
+                                                  bias=bias)
             self.out_spatial_shape = self.project_conv.out_spatial_shape
         else:
-            self.project_conv = nn.Conv2d(
-                in_channels=exp_channels,
-                out_channels=out_channels,
-                kernel_size=kernel_size,
-                stride=stride,
-                padding=1 if kernel_size > 1 else 0,
-                bias=bias)
-            self.out_spatial_shape = torch_conv_out_spatial_shape(
-                in_spatial_shape, kernel_size, stride)
+            self.project_conv = nn.Conv2d(in_channels=exp_channels,
+                                          out_channels=out_channels,
+                                          kernel_size=kernel_size,
+                                          stride=stride,
+                                          padding=1 if kernel_size > 1 else 0,
+                                          bias=bias)
+            self.out_spatial_shape = torch_conv_out_spatial_shape(expansion_out_shape, kernel_size, stride)
 
-        self.project_bn = nn.BatchNorm2d(
-            num_features=out_channels,
-            eps=bn_epsilon,
-            momentum=bn_momentum)
+        self.project_bn = nn.BatchNorm2d(num_features=out_channels,
+                                         eps=bn_epsilon,
+                                         momentum=bn_momentum)
 
         self.ops_lst.extend(
             [self.project_conv, self.project_bn])
@@ -406,7 +387,71 @@ class FusedMBConvBlockV2(nn.Module):
 
 
 class EfficientNetV2(nn.Module):
-    _models = {'s': {'num_repeat': [2, 4, 4, 6, 9, 15],
+    _models = {'b0': {'num_repeat': [1, 2, 2, 3, 5, 8],
+                      'kernel_size': [3, 3, 3, 3, 3, 3],
+                      'stride': [1, 2, 2, 2, 1, 2],
+                      'expand_ratio': [1, 4, 4, 4, 6, 6],
+                      'in_channel': [32, 16, 32, 48, 96, 112],
+                      'out_channel': [16, 32, 48, 96, 112, 192],
+                      'se_ratio': [None, None, None, 0.25, 0.25, 0.25],
+                      'conv_type': [1, 1, 1, 0, 0, 0],
+                      'is_feature_stage': [False, True, True, False, True, True],
+                      'width_coefficient': 1.0,
+                      'depth_coefficient': 1.0,
+                      'train_size': 192,
+                      'eval_size': 224,
+                      'dropout': 0.2,
+                      'weight_url': 'https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlnUVBhWkZRcWNXR3dINmRLP2U9UUI5ZndH/root/content',
+                      'model_name': 'efficientnet_v2_b0_21k_ft1k-a91e14c5.pth'},
+               'b1': {'num_repeat': [1, 2, 2, 3, 5, 8],
+                      'kernel_size': [3, 3, 3, 3, 3, 3],
+                      'stride': [1, 2, 2, 2, 1, 2],
+                      'expand_ratio': [1, 4, 4, 4, 6, 6],
+                      'in_channel': [32, 16, 32, 48, 96, 112],
+                      'out_channel': [16, 32, 48, 96, 112, 192],
+                      'se_ratio': [None, None, None, 0.25, 0.25, 0.25],
+                      'conv_type': [1, 1, 1, 0, 0, 0],
+                      'is_feature_stage': [False, True, True, False, True, True],
+                      'width_coefficient': 1.0,
+                      'depth_coefficient': 1.1,
+                      'train_size': 192,
+                      'eval_size': 240,
+                      'dropout': 0.2,
+                      'weight_url': 'https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlnUVJnVGV5UndSY2J2amwtP2U9dTBiV1lO/root/content',
+                      'model_name': 'efficientnet_v2_b1_21k_ft1k-58f4fb47.pth'},
+               'b2': {'num_repeat': [1, 2, 2, 3, 5, 8],
+                      'kernel_size': [3, 3, 3, 3, 3, 3],
+                      'stride': [1, 2, 2, 2, 1, 2],
+                      'expand_ratio': [1, 4, 4, 4, 6, 6],
+                      'in_channel': [32, 16, 32, 48, 96, 112],
+                      'out_channel': [16, 32, 48, 96, 112, 192],
+                      'se_ratio': [None, None, None, 0.25, 0.25, 0.25],
+                      'conv_type': [1, 1, 1, 0, 0, 0],
+                      'is_feature_stage': [False, True, True, False, True, True],
+                      'width_coefficient': 1.1,
+                      'depth_coefficient': 1.2,
+                      'train_size': 208,
+                      'eval_size': 260,
+                      'dropout': 0.3,
+                      'weight_url': 'https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlnUVY4M2NySVFZbU41X0tGP2U9ZERZVmxK/root/content',
+                      'model_name': 'efficientnet_v2_b2_21k_ft1k-db4ac0ee.pth'},
+               'b3': {'num_repeat': [1, 2, 2, 3, 5, 8],
+                      'kernel_size': [3, 3, 3, 3, 3, 3],
+                      'stride': [1, 2, 2, 2, 1, 2],
+                      'expand_ratio': [1, 4, 4, 4, 6, 6],
+                      'in_channel': [32, 16, 32, 48, 96, 112],
+                      'out_channel': [16, 32, 48, 96, 112, 192],
+                      'se_ratio': [None, None, None, 0.25, 0.25, 0.25],
+                      'conv_type': [1, 1, 1, 0, 0, 0],
+                      'is_feature_stage': [False, True, True, False, True, True],
+                      'width_coefficient': 1.2,
+                      'depth_coefficient': 1.4,
+                      'train_size': 240,
+                      'eval_size': 300,
+                      'dropout': 0.3,
+                      'weight_url': 'https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlnUVpkamdZUzhhaDdtTTZLP2U9anA4VWN2/root/content',
+                      'model_name': 'efficientnet_v2_b3_21k_ft1k-3da5874c.pth'},
+               's': {'num_repeat': [2, 4, 4, 6, 9, 15],
                      'kernel_size': [3, 3, 3, 3, 3, 3],
                      'stride': [1, 2, 2, 2, 1, 2],
                      'expand_ratio': [1, 4, 4, 4, 6, 6],
@@ -509,8 +554,7 @@ class EfficientNetV2(nn.Module):
             self.stem_conv = SamePaddingConv2d(
                 in_spatial_shape=in_spatial_shape,
                 in_channels=in_channels,
-                out_channels=round_filters(
-                    self.cfg['in_channel'][0], self.cfg['width_coefficient']),
+                out_channels=round_filters(self.cfg['in_channel'][0], self.cfg['width_coefficient']),
                 kernel_size=3,
                 stride=2,
                 bias=bias
@@ -519,8 +563,7 @@ class EfficientNetV2(nn.Module):
         else:
             self.stem_conv = nn.Conv2d(
                 in_channels=in_channels,
-                out_channels=round_filters(
-                    self.cfg['in_channel'][0], self.cfg['width_coefficient']),
+                out_channels=round_filters(self.cfg['in_channel'][0], self.cfg['width_coefficient']),
                 kernel_size=3,
                 stride=2,
                 padding=1,
@@ -528,8 +571,7 @@ class EfficientNetV2(nn.Module):
             )
 
         self.stem_bn = nn.BatchNorm2d(
-            num_features=round_filters(
-                self.cfg['in_channel'][0], self.cfg['width_coefficient']),
+            num_features=round_filters(self.cfg['in_channel'][0], self.cfg['width_coefficient']),
             eps=bn_epsilon,
             momentum=bn_momentum)
 
@@ -537,8 +579,9 @@ class EfficientNetV2(nn.Module):
 
         drop_connect_rates = self.get_dropconnect_rates(drop_connect_rate)
 
-        stages = zip(*[self.cfg[x] for x in ['num_repeat', 'kernel_size', 'stride',
-                                             'expand_ratio', 'in_channel', 'out_channel', 'se_ratio', 'conv_type', 'is_feature_stage']])
+        stages = zip(*[self.cfg[x] for x in
+                       ['num_repeat', 'kernel_size', 'stride', 'expand_ratio', 'in_channel', 'out_channel', 'se_ratio',
+                        'conv_type', 'is_feature_stage']])
 
         idx = 0
 
@@ -556,24 +599,22 @@ class EfficientNetV2(nn.Module):
             conv_block = MBConvBlockV2 if conv_type == 0 else FusedMBConvBlockV2
 
             for _ in range(num_repeat):
-                se_size = None if se_ratio is None else max(
-                    1, int(in_channels * se_ratio))
-                _b = conv_block(
-                    in_channels=in_channels,
-                    out_channels=out_channels,
-                    kernel_size=kernel_size,
-                    stride=stride,
-                    expansion_factor=expand_ratio,
-                    act_fn=activation,
-                    act_kwargs=activation_kwargs,
-                    bn_epsilon=bn_epsilon,
-                    bn_momentum=bn_momentum,
-                    se_size=se_size,
-                    drop_connect_rate=drop_connect_rates[idx],
-                    bias=bias,
-                    tf_style_conv=tf_style_conv,
-                    in_spatial_shape=in_spatial_shape
-                )
+                se_size = None if se_ratio is None else max(1, int(in_channels * se_ratio))
+                _b = conv_block(in_channels=in_channels,
+                                out_channels=out_channels,
+                                kernel_size=kernel_size,
+                                stride=stride,
+                                expansion_factor=expand_ratio,
+                                act_fn=activation,
+                                act_kwargs=activation_kwargs,
+                                bn_epsilon=bn_epsilon,
+                                bn_momentum=bn_momentum,
+                                se_size=se_size,
+                                drop_connect_rate=drop_connect_rates[idx],
+                                bias=bias,
+                                tf_style_conv=tf_style_conv,
+                                in_spatial_shape=in_spatial_shape
+                                )
                 self.blocks.append(_b)
                 idx += 1
                 if tf_style_conv:
@@ -584,18 +625,15 @@ class EfficientNetV2(nn.Module):
             if is_feature_stage:
                 self.feature_block_ids.append(idx - 1)
 
-        head_conv_out_channels = round_filters(
-            1280, self.cfg['depth_coefficient'])
+        head_conv_out_channels = round_filters(1280, self.cfg['width_coefficient'])
 
-        self.head_conv = nn.Conv2d(
-            in_channels=in_channels,
-            out_channels=head_conv_out_channels,
-            kernel_size=1,
-            bias=bias)
-        self.head_bn = nn.BatchNorm2d(
-            num_features=head_conv_out_channels,
-            eps=bn_epsilon,
-            momentum=bn_momentum)
+        self.head_conv = nn.Conv2d(in_channels=in_channels,
+                                   out_channels=head_conv_out_channels,
+                                   kernel_size=1,
+                                   bias=bias)
+        self.head_bn = nn.BatchNorm2d(num_features=head_conv_out_channels,
+                                      eps=bn_epsilon,
+                                      momentum=bn_momentum)
         self.head_act = get_activation(activation, **activation_kwargs)
 
         self.dropout = nn.Dropout(p=dropout_rate)
@@ -609,16 +647,15 @@ class EfficientNetV2(nn.Module):
         return
 
     def _load_state(self, in_channels, n_classes, progress, tf_style_conv):
-        state_dict = model_zoo.load_url(
-            self.cfg['weight_url'],
-            progress=progress,
-            file_name=self.cfg['model_name'])
+        state_dict = model_zoo.load_url(self.cfg['weight_url'],
+                                        progress=progress,
+                                        file_name=self.cfg['model_name'])
 
         strict = True
 
         if not tf_style_conv:
-            state_dict = OrderedDict([(k.replace('.conv.', '.'), v) if '.conv.' in k else (
-                k, v) for k, v in state_dict.items()])
+            state_dict = OrderedDict(
+                [(k.replace('.conv.', '.'), v) if '.conv.' in k else (k, v) for k, v in state_dict.items()])
 
         if in_channels != 3:
             if tf_style_conv:
@@ -656,12 +693,10 @@ class EfficientNetV2(nn.Module):
 
     def forward(self, x):
         x = self.stem_act(self.stem_bn(self.stem_conv(x)))
-
         for block in self.blocks:
             x = block(x)
-
         x = self.head_act(self.head_bn(self.head_conv(x)))
-
         x = self.dropout(torch.flatten(self.avpool(x), 1))
+        x = self.fc(x)
 
-        return self.fc(x)
+        return x

@@ -1,4 +1,4 @@
-# Pytorch EfficientNetV2 EfficientNetV1 with pretrained weights
+# EfficientNetV2 EfficientNetV1 in Pytorch with pretrained weights
 
 A single-file implementation of EfficientNetV2 and EfficientNetV1 as introduced in:  
 [\[Tan & Le 2021\]: EfficientNetV2: Smaller Models and Faster Training](https://arxiv.org/pdf/2104.00298.pdf)  
@@ -13,6 +13,10 @@ These weigths were converted to Pytorch format and are provided in this reposito
 ### EfficientNet V2
 | Model | ImageNet 1k Top-1 accuracy, % |
 | --- | --- |
+| EfficientNetV2-b0 | 77.590% |
+| EfficientNetV2-b1 | 78.872% |
+| EfficientNetV2-b2 | 79.388% |
+| EfficientNetV2-b3 | 82.260% |
 | EfficientNetV2-S | 84.282% |
 | EfficientNetV2-M | 85.596% |
 | EfficientNetV2-L | 86.298% |
@@ -109,7 +113,7 @@ for i, feature in enumerate(features):
 
 
 ### EfficientNet V2
-* ***model_name***, *(str)* - Model name, one of 's', 'm', 'l', 'xl'
+* ***model_name***, *(str)* - Model name, one of 'b0', 'b1', 'b2', 'b3', 's', 'm', 'l', 'xl'
 * ***in_channels***, *(int)*, *(Default=3)* - Number of channels in input image
 * ***n_classes***, *(int)*, *(Default=1000)* - Number of output classes
 * ***tf_style_conv***, *(bool)*, *(Default=False)* - Whether to simulate "SAME" padding of Tensorflow's convolution op. Set to *True* when evaluating pretrained models against Imagenet dataset
