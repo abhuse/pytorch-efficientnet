@@ -34,6 +34,23 @@ These weigths were converted to Pytorch format and are provided in this reposito
 | EfficientNet-B6 | 84.136% |
 | EfficientNet-B7 | 84.578% |
 
+## Important: TensorFlow-style Convolution Flag
+
+The original TensorFlow implementation uses 'SAME' padding for convolutional operations, which PyTorch lacks by default. This difference causes significant accuracy drops when using the converted pretrained weights. In order to overcome this, `tf_style_conv` parameter is introduced. When set to True, it will simulate Tensorflow's padding calculation, which will allow to achieve same accuracy when evaluating pretrained weights on Imagenet evaluation set.
+
+### When to use `tf_style_conv=True`:
+If you want to achieve compatibility with original TensorFlow implementation and ensure features match the original TensorFlow model, e.g.:
+- **Evaluating pretrained weights against ImageNet dataset**
+- **Using provided pretrained weights for feature extraction**
+
+### When to use `tf_style_conv=False`:
+- **Training/fine-tuning on your own dataset**
+- **Subsequently using your own weights for feature extraction**
+
+In this case, model uses standard PyTorch convolution ops.
+
+**Note:** This is only applicable to EfficientNet V2 models. 
+
 ## Usage
 
 Check out  [cifar100_train.ipynb](cifar100_train.ipynb) if you would like to experiment with models.  
@@ -116,7 +133,7 @@ for i, feature in enumerate(features):
 * ***model_name***, *(str)* - Model name, one of 'b0', 'b1', 'b2', 'b3', 's', 'm', 'l', 'xl'
 * ***in_channels***, *(int)*, *(Default=3)* - Number of channels in input image
 * ***n_classes***, *(int)*, *(Default=1000)* - Number of output classes
-* ***tf_style_conv***, *(bool)*, *(Default=False)* - Whether to simulate "SAME" padding of Tensorflow's convolution op. Set to *True* when evaluating pretrained models against Imagenet dataset
+* ***tf_style_conv***, *(bool)*, *(Default=False)* - Whether to simulate "SAME" padding of Tensorflow's convolution op. Set to *True* when evaluating pretrained models against Imagenet dataset or when using the provided weights for feature extraction. When training or fine-tuning, set to *False* 
 * ***in_spatial_shape***, *(int or iterable of ints)*,
   *(Default=None)* - Spatial dimensionality of input image, tuple
   (height, width) or single integer *size* for shape (*size*, *size*). 
