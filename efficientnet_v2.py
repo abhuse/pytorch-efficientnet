@@ -446,7 +446,7 @@ class EfficientNetV2(nn.Module):
             "train_size": 192,
             "eval_size": 224,
             "dropout": 0.2,
-            "weight_url": "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlnUVBhWkZRcWNXR3dINmRLP2U9UUI5ZndH/root/content",
+            "weight_url": "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet_v2_b0_21k_ft1k-a91e14c5.pth",
             "model_name": "efficientnet_v2_b0_21k_ft1k-a91e14c5.pth",
         },
         "b1": {
@@ -464,7 +464,7 @@ class EfficientNetV2(nn.Module):
             "train_size": 192,
             "eval_size": 240,
             "dropout": 0.2,
-            "weight_url": "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlnUVJnVGV5UndSY2J2amwtP2U9dTBiV1lO/root/content",
+            "weight_url": "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet_v2_b1_21k_ft1k-58f4fb47.pth",
             "model_name": "efficientnet_v2_b1_21k_ft1k-58f4fb47.pth",
         },
         "b2": {
@@ -482,7 +482,7 @@ class EfficientNetV2(nn.Module):
             "train_size": 208,
             "eval_size": 260,
             "dropout": 0.3,
-            "weight_url": "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlnUVY4M2NySVFZbU41X0tGP2U9ZERZVmxK/root/content",
+            "weight_url": "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet_v2_b2_21k_ft1k-db4ac0ee.pth",
             "model_name": "efficientnet_v2_b2_21k_ft1k-db4ac0ee.pth",
         },
         "b3": {
@@ -500,7 +500,7 @@ class EfficientNetV2(nn.Module):
             "train_size": 240,
             "eval_size": 300,
             "dropout": 0.3,
-            "weight_url": "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlnUVpkamdZUzhhaDdtTTZLP2U9anA4VWN2/root/content",
+            "weight_url": "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet_v2_b3_21k_ft1k-3da5874c.pth",
             "model_name": "efficientnet_v2_b3_21k_ft1k-3da5874c.pth",
         },
         "s": {
@@ -518,7 +518,7 @@ class EfficientNetV2(nn.Module):
             "train_size": 300,
             "eval_size": 384,
             "dropout": 0.2,
-            "weight_url": "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmllbFF5VWJOZzd0cmhBbm8/root/content",
+            "weight_url": "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet_v2_s_21k_ft1k-dbb43f38.pth",
             "model_name": "efficientnet_v2_s_21k_ft1k-dbb43f38.pth",
         },
         "m": {
@@ -536,7 +536,7 @@ class EfficientNetV2(nn.Module):
             "train_size": 384,
             "eval_size": 480,
             "dropout": 0.3,
-            "weight_url": "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmllN1ZDazRFb0o1bnlyNUE/root/content",
+            "weight_url": "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet_v2_m_21k_ft1k-da8e56c0.pth",
             "model_name": "efficientnet_v2_m_21k_ft1k-da8e56c0.pth",
         },
         "l": {
@@ -555,7 +555,7 @@ class EfficientNetV2(nn.Module):
             "train_size": 384,
             "eval_size": 480,
             "dropout": 0.4,
-            "weight_url": "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlmcmIyRHEtQTBhUTBhWVE/root/content",
+            "weight_url": "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet_v2_l_21k_ft1k-08121eee.pth",
             "model_name": "efficientnet_v2_l_21k_ft1k-08121eee.pth",
         },
         "xl": {
@@ -574,7 +574,7 @@ class EfficientNetV2(nn.Module):
             "train_size": 384,
             "eval_size": 512,
             "dropout": 0.4,
-            "weight_url": "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlmVXQtRHJLa21taUkxWkE/root/content",
+            "weight_url": "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet_v2_xl_21k_ft1k-1fcc9744.pth",
             "model_name": "efficientnet_v2_xl_21k_ft1k-1fcc9744.pth",
         },
     }

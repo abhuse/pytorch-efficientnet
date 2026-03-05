@@ -1,9 +1,9 @@
+import collections.abc as container_abcs
 from math import ceil
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import collections.abc as container_abcs
 from torch.utils import model_zoo
 
 
@@ -461,14 +461,14 @@ class EfficientNet(nn.Module):
     ]
 
     state_dict_urls = [
-        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmliYV9HaE5PWWVEbXVMd3c/root/content",
-        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlicV9HaE5PWWVEbXVMd3c/root/content",
-        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmliNl9HaE5PWWVEbXVMd3c/root/content",
-        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmljS19HaE5PWWVEbXVMd3c/root/content",
-        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmljYV9HaE5PWWVEbXVMd3c/root/content",
-        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmljcV9HaE5PWWVEbXVMd3c/root/content",
-        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmljNl9HaE5PWWVEbXVMd3c/root/content",
-        "https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3UvcyFBdGlRcHc5VGNjZmlkS19HaE5PWWVEbXVMd3c/root/content",
+        "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet-b0-d86f8792.pth",
+        "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet-b1-82896633.pth",
+        "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet-b2-e4b93854.pth",
+        "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet-b3-3b9ca610.pth",
+        "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet-b4-24436ca5.pth",
+        "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet-b5-d8e577e8.pth",
+        "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet-b6-f20845c7.pth",
+        "https://huggingface.co/abhuse/efficientnet/resolve/main/efficientnet-b7-86e8e374.pth",
     ]
 
     dict_names = [
